@@ -1,0 +1,23 @@
+{
+  "best_model": "GradientBoosting",
+  "best_test_mae": 748.9106291282121,
+  "features": [
+    "Manufacturer Name",
+    "Car Name",
+    "Car Type",
+    "Color",
+    "Gearbox",
+    "Energy",
+    "Location",
+    "Car Age",
+    "Mileage-KM",
+    "Mileage per Year",
+    "Engine Power-HP",
+    "Number of Seats",
+    "Number of Doors"
+  ],
+  "train_rows": 1732,
+  "test_rows": 434,
+  "threshold_low": -0.193295121327009,
+  "threshold_high": -0.1578372713327027
+}
