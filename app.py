@@ -20,14 +20,6 @@ import random
 import plotly.express as px
 import plotly.graph_objects as go
 
-# ── v2: pre-build embedding index on startup so Semantic Search and Chatbot
-# pages load instantly. Runs once and saves to model/faiss_index.pkl
-try:
-    from src.embeddings import load_index, build_index as _build_index
-    _index_ready = load_index() is not None
-except ImportError:
-    _index_ready = False  # sentence-transformers not installed yet
-
 st.set_page_config(
     page_title="CarValue AI",
     page_icon="🚗",
@@ -41,6 +33,21 @@ st.markdown("""
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,600;1,9..40,300&display=swap');
 
   html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
+
+  /* ── Dark mode ── */
+  .stApp, .stApp > div, section[data-testid="stSidebar"] {
+    background-color: #0d1117 !important;
+  }
+  section[data-testid="stSidebar"] {
+    background-color: #161b22 !important;
+    border-right: 1px solid #2d3748;
+  }
+  .stTabs [data-baseweb="tab-list"] { background-color: #0d1117 !important; }
+  .stTabs [data-baseweb="tab"] { color: #a0aec0 !important; }
+  .stTabs [aria-selected="true"] { color: #e2e8f0 !important; }
+  div[data-testid="stMetric"] { background-color: #161b22; border-radius: 10px; padding: 12px; border: 1px solid #2d3748; }
+  div[data-testid="stMetricValue"] > div { color: #e2e8f0 !important; }
+  div[data-testid="stMetricLabel"] > div { color: #718096 !important; }
 
   .kpi-card {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -321,12 +328,6 @@ with st.sidebar:
     st.markdown(f"**{len(df_unsold):,}** cars in inventory")
     st.markdown(f"🟢 {n_uv:,}  🟡 {n_fv:,}  🔴 {n_op:,}")
 
-    st.divider()
-    st.markdown("**🆕 AI Features (v2)**")
-    st.page_link("pages/semantic_search.py", label="🔍 Semantic Search")
-    st.page_link("pages/chatbot.py",         label="💬 AI Chatbot")
-    st.caption("Describe a car in plain English or ask the AI questions about the inventory.")
-
 # ═════════════════════════════════════════════════════════════════════════════
 # PAGE HEADER
 # ═════════════════════════════════════════════════════════════════════════════
@@ -357,28 +358,31 @@ with tab1:
         df_map = df_map[df_map["Value Label"] == "Undervalued"]
     df_map["color"] = df_map["Value Label"].apply(lambda l: COLOR_MAP.get(l, [180, 180, 180, 160]))
 
-    # KPI row
+    # KPI row — filter-reactive
+    n_good   = (df_map["Value Label"] == "Undervalued").sum()
+    n_fair   = (df_map["Value Label"] == "Fair Value").sum()
+    n_risky  = (df_map["Value Label"] == "Overpriced").sum()
     avg_gap  = df_map["Value Gap"].mean() if len(df_map) else 0
     avg_pred = df_map["Predicted Price"].mean() if len(df_map) else 0
     avg_list = df_map["Price-$"].mean() if len(df_map) else 0
     uv_pct   = (df_map["Value Label"] == "Undervalued").mean() * 100 if len(df_map) else 0
-    discount = (1 - avg_pred / avg_list) * 100 if avg_list else 0
 
     k1, k2, k3, k4, k5 = st.columns(5)
-    kpis = [
-        ("Cars on Map",      f"{len(df_map):,}",           ""),
-        ("Avg Listed",       f"${avg_list:,.0f}",          "asking price"),
-        ("Avg Market Value", f"${avg_pred:,.0f}",          "AI predicted"),
-        ("Avg Value Gap",    f"${avg_gap:+,.0f}",          "predicted − listed"),
-        ("Undervalued %",    f"{uv_pct:.1f}%",             "of shown cars"),
-    ]
-    for col, (lbl, val, sub) in zip([k1, k2, k3, k4, k5], kpis):
-        color_cls = "pos" if "+" in val else ("neg" if val.startswith("$-") else "neu")
+    def kpi(col, label, value, sub, color="#e2e8f0"):
         col.markdown(f"""<div class='kpi-card'>
-            <div class='kpi-label'>{lbl}</div>
-            <div class='kpi-value <span class='{color_cls}'>{val}</span>'>{val}</div>
+            <div class='kpi-label'>{label}</div>
+            <div class='kpi-value' style='color:{color}'>{value}</div>
             <div class='kpi-delta'>{sub}</div>
         </div>""", unsafe_allow_html=True)
+
+    kpi(k1, "Cars Shown",       f"{len(df_map):,}",
+        f"🟢 {n_good:,} · 🟡 {n_fair:,} · 🔴 {n_risky:,}", "#76e4f7")
+    kpi(k2, "Avg Listed Price",  f"${avg_list:,.0f}",   "asking price")
+    kpi(k3, "Avg AI Value",      f"${avg_pred:,.0f}",   "model predicted")
+    gap_color = "#68d391" if avg_gap > 0 else "#fc8181"
+    kpi(k4, "Avg Value Gap",     f"${avg_gap:+,.0f}",   "predicted − listed", gap_color)
+    uv_color = "#68d391" if uv_pct >= 30 else ("#ecc94b" if uv_pct >= 15 else "#fc8181")
+    kpi(k5, "Undervalued %",     f"{uv_pct:.1f}%",      "of shown cars", uv_color)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -402,7 +406,7 @@ with tab1:
         pdk.Deck(
             layers=[states_layer, scatter_layer],
             initial_view_state=pdk.ViewState(latitude=39.5, longitude=-98.35, zoom=3.5, pitch=0),
-            map_style="mapbox://styles/mapbox/dark-v10",
+            map_style="mapbox://styles/mapbox/light-v11",
             tooltip={"text": (
                 "{Manufacturer Name} {Car Name}  ({Car Type})\n"
                 "📍 {Location}\n"
@@ -774,7 +778,7 @@ with tab5:
 | **Remaining 44%** | Expected | Negotiation, urgency, local demand — not observable in structured data |
 | **Training set** | 2,166 sold cars | Ground-truth market-clearing prices |
 | **Prediction set** | 7,834 unsold cars | Never seen during training |
-    """)
+    """.replace("$749 on a", "$749 on a\u200b"))
 
     st.markdown("### 📊 Value% Distribution Across Unsold Inventory")
     fig_d = go.Figure()
