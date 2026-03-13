@@ -26,11 +26,22 @@ _AGG_PATTERNS = [
     r"\baverage\b", r"\bavg\b", r"\bmean\b", r"\bhow many\b",
     r"\bcount\b", r"\btotal\b", r"\bmost (expensive|common|popular|affordable)\b",
     r"\bcheapest\b", r"\bpriciest\b", r"\bstatistic\b",
+    r"\bcompare\b", r"\bbreakdown\b", r"\bdistribution\b",
 ]
 _AGG_RE = re.compile("|".join(_AGG_PATTERNS), re.IGNORECASE)
 
+# ── keyword patterns that suggest "show me the best deals" sorted queries ──────
+_BEST_PATTERNS = [
+    r"\bbest deal\b", r"\btop deal\b", r"\bhighest score\b", r"\bbest score\b",
+    r"\bmost undervalued\b", r"\bbiggest discount\b", r"\bbest value\b",
+    r"\babsolute best\b", r"\btop ([\d]+)? ?(deal|value|score)\b",
+]
+_BEST_RE = re.compile("|".join(_BEST_PATTERNS), re.IGNORECASE)
+
 
 def _detect_mode(question: str) -> str:
+    if _BEST_RE.search(question):
+        return "best_deals"
     if _AGG_RE.search(question):
         return "aggregate"
     return "semantic"
@@ -100,7 +111,47 @@ def _aggregate_context(question: str, df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-# ── semantic retrieval ────────────────────────────────────────────────────────
+# ── best deals retrieval ──────────────────────────────────────────────────────
+def _best_deals_context(question: str, df: pd.DataFrame, k: int = 10) -> str:
+    """Sort by Deal Score descending and return the top k — with optional filters."""
+    q = question.lower()
+    filtered = df.copy()
+
+    # Optional filters by manufacturer / type / energy / location
+    for mfr in df["Manufacturer Name"].dropna().unique():
+        if mfr.lower() in q:
+            filtered = filtered[filtered["Manufacturer Name"].str.lower() == mfr.lower()]
+            break
+    for ct in df["Car Type"].dropna().unique():
+        if ct.lower() in q:
+            filtered = filtered[filtered["Car Type"].str.lower() == ct.lower()]
+            break
+    for en in df["Energy"].dropna().unique():
+        if en.lower() in q:
+            filtered = filtered[filtered["Energy"].str.lower() == en.lower()]
+            break
+    for loc in df["Location"].dropna().unique():
+        if loc.lower() in q:
+            filtered = filtered[filtered["Location"].str.lower() == loc.lower()]
+            break
+
+    if filtered.empty:
+        filtered = df
+
+    top = filtered.nlargest(k, "Deal Score")
+    lines = [f"Top {len(top)} best deals by Deal Score (sorted highest first):", ""]
+    for i, r in top.iterrows():
+        lines.append(
+            f"{len(lines)-1}. {int(r['Manufactured Year'])} {r['Manufacturer Name']} {r['Car Name']} "
+            f"({r['Car Type']}, {r['Energy']}, {r['Gearbox']})\n"
+            f"   {int(r['Mileage-KM']):,} km | {int(r['Engine Power-HP'])} HP | {r['Location']}\n"
+            f"   Asking: ${r['Price-$']:,.0f} | AI value: ${r['Predicted Price']:,.0f} | "
+            f"Gap: ${r['Gap ($)']:+,.0f} | Score: {r['Deal Score']:.0f}/100 | Verdict: {r['Deal Label']}"
+        )
+    return "\n".join(lines)
+
+
+
 def _semantic_context(question: str, index, df: pd.DataFrame, k: int = 6) -> str:
     """Run FAISS search and format results as readable context."""
     results = semantic_search(question, index, df, k=k)
@@ -133,6 +184,8 @@ def retrieve_context(
     """
     mode = force_mode or _detect_mode(question)
 
+    if mode == "best_deals":
+        return _best_deals_context(question, df, k=k), "best_deals"
     if mode == "aggregate" or index is None:
         return _aggregate_context(question, df), "aggregate"
 
