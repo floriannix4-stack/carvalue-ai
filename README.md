@@ -1,92 +1,72 @@
-# 🚗 CarValue AI by Florian Nix
+## 🆕 Version 2 — LLM & Semantic Search
 
-**AI-powered used car market intelligence — find good deals before anyone else.**
+Version 2 adds two new capabilities on top of the existing ML pipeline:
 
-A Streamlit prototype built on historical car sales data to predict the fair market value of unsold cars and classify each listing as a **Good Deal**, **Potential Deal**, or **Risky / Overpaying** — using the model's own error margin (MAE) as the classification threshold.
+### 🔍 Semantic Car Search (`pages/semantic_search.py`)
 
----
+Instead of rule-based keyword filters, the search page uses **sentence-transformer embeddings** to find cars that match a free-text description.
 
-## 📸 Overview
+- Model: `sentence-transformers/all-MiniLM-L6-v2`
+- Index: FAISS `IndexFlatIP` (cosine similarity on normalised vectors)
+- Each car is converted to a natural-language sentence, embedded, and stored in the index
+- User query is embedded at search time and compared against all 7,834 cars
 
-The prototype features five interactive tabs:
+Example queries:
+```
+"cheap electric car with low mileage"
+"family SUV automatic diesel"
+"recent Toyota under $8,000 in California"
+```
 
-| Tab | Description |
-|-----|-------------|
-| 🌍 **Market Overview** | Interactive US map with 7,834 unsold cars colour-coded by deal quality |
-| 🔎 **Deal Finder** | Filter inventory by manufacturer, car type, fuel, mileage, price, and deal score |
-| 🔮 **Price Estimator** | Enter any car's details + asking price → get an instant AI valuation verdict |
-| 📊 **Analytics** | Plotly charts: price distributions, value gaps by location, fuel type breakdowns |
-| 🤖 **Model Performance** | Model metrics, GridSearchCV comparison, threshold logic, feature list |
+### 💬 AI Chatbot (`pages/chatbot.py`)
 
----
+A RAG (Retrieval-Augmented Generation) chatbot grounded in the dataset.
 
-## 🧠 How the Classification Works
+Architecture:
+```
+User question
+     ↓
+Retrieval router (semantic vs aggregate)
+     ↓
+Context string (top-k cars or dataset statistics)
+     ↓
+Prompt builder (system prompt + history + context + question)
+     ↓
+Anthropic Claude API (claude-sonnet-4-20250514)
+     ↓
+Grounded answer
+```
 
-The model predicts the **market-clearing (sold) price** of a car based on its attributes — excluding the dealer's asking price (`Price-$`), which is intentionally withheld so the AI evaluates it independently.
+Features:
+- Maintains full conversation history (last 6 turns passed to LLM)
+- Two retrieval modes: semantic (FAISS) for "find me cars like X" and aggregate (pandas) for "what is the average price of Y"
+- Retrieved context shown optionally for transparency
+- Hallucination guard: system prompt explicitly instructs the model to only use retrieved context
 
-**Gap** = Asking Price − AI Predicted Value
-
-| Verdict | Condition | Logic |
-|---------|-----------|-------|
-| 🟢 Good Deal | Gap ≤ 1.5 × MAE (~$1,124) | Within 1.5× the model's average error — competitively priced |
-| 🟡 Potential Deal | Gap ≤ 2.0 × MAE (~$1,498) | Within 2× the error margin — negotiate using AI value as anchor |
-| 🔴 Risky / Overpaying | Gap > 2.0 × MAE (~$1,498) | Seller asks significantly more than what comparable cars have sold for |
-
-The model's **MAE of ~$749** is used as the calibration unit for thresholds, making the classification statistically grounded rather than arbitrary.
-
----
-
-## 🗂️ Project Structure
+### New file structure
 
 ```
 carvalue-ai/
-│
-├── app.py                          # Main Streamlit application
-├── train_model.py                  # Offline model training script (run once)
-├── requirements.txt                # Python dependencies
-│
-├── data/
-│   ├── used_car_sales.csv          # Dataset (10,000 cars: 2,166 sold + 7,834 unsold)
-│   └── gz_2010_us_040_00_500k.json # US state boundaries GeoJSON for the map
-│
+├── src/
+│   ├── __init__.py
+│   ├── embeddings.py       # FAISS index builder + semantic_search()
+│   ├── retrieval.py        # Context retrieval router (semantic / aggregate)
+│   ├── chatbot_engine.py   # RAG pipeline + Anthropic API call
+│   └── prompts.py          # System prompt + RAG template
+├── pages/
+│   ├── semantic_search.py  # Streamlit page: embedding search UI
+│   └── chatbot.py          # Streamlit page: chatbot UI with history
 └── model/
-    ├── model.pkl                   # Trained GradientBoosting pipeline (joblib)
-    ├── thresholds.pkl              # Calibrated Q25/Q75 thresholds
-    ├── model_meta.json             # Training metadata (MAE, R², feature list)
-    └── model_comparison.csv        # RandomForest vs GradientBoosting comparison
+    └── faiss_index.pkl     # Pre-built FAISS index (auto-generated on first run)
 ```
 
----
+### Streamlit Cloud setup for Chatbot
 
-## 📦 Dataset
+Add your Anthropic API key as a secret in the Streamlit Cloud dashboard:
 
-- **10,000 car listings** across 17 US locations
-- **2,166 sold** (used for training — ground-truth market prices)
-- **7,834 unsold** (holdout set — used for live predictions in the app)
-- Features: manufacturer, model, car type, fuel type, gearbox, colour, location, year, mileage, engine power, seats, doors
+```toml
+# .streamlit/secrets.toml
+ANTHROPIC_API_KEY = "sk-ant-..."
+```
 
----
-
-## 🤖 Model Details
-
-| Item | Detail |
-|------|--------|
-| **Algorithm** | GradientBoostingRegressor (won GridSearchCV vs RandomForest) |
-| **Target** | Sold Price-$ (actual market-clearing price) |
-| **Preprocessing** | OneHotEncoder for categoricals, passthrough for numerals |
-| **Target transform** | Log1p / expm1 (stabilises variance across price range) |
-| **Test MAE** | ~$749 (~10.9% of mean sold price) |
-| **Test R²** | ~0.56 |
-| **Train/Test split** | 80/20 on sold cars only |
-
-> **Key design decision:** `Price-$` (the dealer's asking price) is deliberately excluded from features. Including it caused the model to memorise the listing price (MAE ≈ $0) rather than learn true market dynamics.
-
----
-
-## 🛠️ Tech Stack
-
-- [Streamlit](https://streamlit.io/) — web app framework
-- [scikit-learn](https://scikit-learn.org/) — model training (GradientBoosting, GridSearchCV)
-- [Plotly](https://plotly.com/python/) — interactive charts
-- [pydeck](https://deckgl.readthedocs.io/) — geospatial map
-- [pandas](https://pandas.pydata.org/) / [numpy](https://numpy.org/) — data processing
+The key is automatically injected as an environment variable and picked up by `chatbot_engine.py`.
