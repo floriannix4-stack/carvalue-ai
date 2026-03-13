@@ -138,8 +138,8 @@ def _best_deals_context(question: str, df: pd.DataFrame, k: int = 10) -> str:
     if filtered.empty:
         filtered = df
 
-    top = filtered.nlargest(k, "Deal Score")
-    lines = [f"Top {len(top)} best deals by Deal Score (sorted highest first):", ""]
+    top = filtered.nsmallest(k, "Gap ($)")
+    lines = [f"Top {len(top)} best deals sorted by smallest gap (asking price closest to AI value):", ""]
     for i, r in top.iterrows():
         lines.append(
             f"{len(lines)-1}. {int(r['Manufactured Year'])} {r['Manufacturer Name']} {r['Car Name']} "
