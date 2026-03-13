@@ -34,20 +34,58 @@ st.markdown("""
 
   html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 
-  /* ── Dark mode ── */
-  .stApp, .stApp > div, section[data-testid="stSidebar"] {
-    background-color: #0d1117 !important;
-  }
+  /* ── Dark mode backgrounds ── */
+  .stApp, .stApp > div { background-color: #0d1117 !important; }
   section[data-testid="stSidebar"] {
     background-color: #161b22 !important;
     border-right: 1px solid #2d3748;
   }
+  /* Sidebar text → white */
+  section[data-testid="stSidebar"] label,
+  section[data-testid="stSidebar"] .stMarkdown p,
+  section[data-testid="stSidebar"] span:not([data-baseweb="tag"] span) {
+    color: #e2e8f0 !important;
+  }
+  /* Tabs */
   .stTabs [data-baseweb="tab-list"] { background-color: #0d1117 !important; }
   .stTabs [data-baseweb="tab"] { color: #a0aec0 !important; }
   .stTabs [aria-selected="true"] { color: #e2e8f0 !important; }
-  div[data-testid="stMetric"] { background-color: #161b22; border-radius: 10px; padding: 12px; border: 1px solid #2d3748; }
+  /* Metrics */
+  div[data-testid="stMetric"] {
+    background-color: #161b22;
+    border-radius: 10px;
+    padding: 12px;
+    border: 1px solid #2d3748;
+  }
   div[data-testid="stMetricValue"] > div { color: #e2e8f0 !important; }
   div[data-testid="stMetricLabel"] > div { color: #718096 !important; }
+  /* Dark form inputs — selectbox, multiselect, number_input, sliders */
+  [data-baseweb="select"] > div:first-child,
+  [data-baseweb="base-input"] {
+    background-color: #1a1a2e !important;
+    color: #e2e8f0 !important;
+    border-color: #2d4a7a !important;
+  }
+  /* Dropdown menu */
+  [data-baseweb="popover"] [role="listbox"],
+  [data-baseweb="menu"] {
+    background-color: #1a1a2e !important;
+    color: #e2e8f0 !important;
+  }
+  [data-baseweb="option"]:hover { background-color: #2d4a7a !important; }
+  /* Dataframe dark */
+  [data-testid="stDataFrame"] > div {
+    background-color: #161b22 !important;
+    border-radius: 8px;
+    border: 1px solid #2d3748;
+  }
+  /* Form container */
+  [data-testid="stForm"] {
+    background-color: #161b22 !important;
+    border: 1px solid #2d3748 !important;
+    border-radius: 10px;
+    padding: 8px;
+  }
 
   .kpi-card {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -138,9 +176,9 @@ FEATURES = [
 ]
 
 COLOR_MAP = {
-    "Undervalued": [72,  187, 120, 200],
-    "Fair Value":  [236, 201,  75, 200],
-    "Overpriced":  [252, 129, 129, 200],
+    "Potential Good Deal": [72,  187, 120, 200],
+    "Fair Deal":           [236, 201,  75, 200],
+    "Potential Bad Deal":  [252, 129, 129, 200],
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -246,9 +284,9 @@ def add_features(df):
     return d
 
 def value_label(vpct):
-    if vpct >= THRESHOLD_HIGH: return "Undervalued"
-    if vpct <= THRESHOLD_LOW:  return "Overpriced"
-    return "Fair Value"
+    if vpct >= THRESHOLD_HIGH: return "Potential Good Deal"
+    if vpct <= THRESHOLD_LOW:  return "Potential Bad Deal"
+    return "Fair Deal"
 
 def compute_score(vpct):
     s = (vpct - THRESHOLD_LOW) / (THRESHOLD_HIGH - THRESHOLD_LOW) * 100
@@ -307,8 +345,8 @@ with st.sidebar:
     st.markdown("**🗺️ Map Filters**")
     sb_labels = st.multiselect(
         "Verdict filter",
-        ["Undervalued", "Fair Value", "Overpriced"],
-        default=["Undervalued", "Fair Value", "Overpriced"],
+        ["Potential Good Deal", "Fair Deal", "Potential Bad Deal"],
+        default=["Potential Good Deal", "Fair Deal", "Potential Bad Deal"],
     )
     sb_states = st.multiselect(
         "State filter",
@@ -318,13 +356,13 @@ with st.sidebar:
 
     st.divider()
     st.markdown("**⚙️ Map Display**")
-    only_deals = st.toggle("Show only Undervalued 🟢", value=False)
+    only_deals = st.toggle("Show only Potential Good Deals 🟢", value=False)
     dot_size   = st.slider("Dot size", 2000, 12000, 5000, step=1000)
 
     st.divider()
-    n_uv = (df_unsold["Value Label"] == "Undervalued").sum()
-    n_fv = (df_unsold["Value Label"] == "Fair Value").sum()
-    n_op = (df_unsold["Value Label"] == "Overpriced").sum()
+    n_uv = (df_unsold["Value Label"] == "Potential Good Deal").sum()
+    n_fv = (df_unsold["Value Label"] == "Fair Deal").sum()
+    n_op = (df_unsold["Value Label"] == "Potential Bad Deal").sum()
     st.markdown(f"**{len(df_unsold):,}** cars in inventory")
     st.markdown(f"🟢 {n_uv:,}  🟡 {n_fv:,}  🔴 {n_op:,}")
 
@@ -334,7 +372,7 @@ with st.sidebar:
 st.markdown("""
 <div class='app-header'>
   <p class='app-title'>🚗 CarValue AI</p>
-  <p class='app-sub'>AI-powered used car market intelligence — spot undervalued deals before anyone else</p>
+  <p class='app-sub'>AI-powered used car market intelligence — find the best deals before anyone else</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -355,17 +393,17 @@ with tab1:
         df_unsold["State"].isin(sb_states)
     ].copy()
     if only_deals:
-        df_map = df_map[df_map["Value Label"] == "Undervalued"]
+        df_map = df_map[df_map["Value Label"] == "Potential Good Deal"]
     df_map["color"] = df_map["Value Label"].apply(lambda l: COLOR_MAP.get(l, [180, 180, 180, 160]))
 
     # KPI row — filter-reactive
-    n_good   = (df_map["Value Label"] == "Undervalued").sum()
-    n_fair   = (df_map["Value Label"] == "Fair Value").sum()
-    n_risky  = (df_map["Value Label"] == "Overpriced").sum()
+    n_good   = (df_map["Value Label"] == "Potential Good Deal").sum()
+    n_fair   = (df_map["Value Label"] == "Fair Deal").sum()
+    n_risky  = (df_map["Value Label"] == "Potential Bad Deal").sum()
     avg_gap  = df_map["Value Gap"].mean() if len(df_map) else 0
     avg_pred = df_map["Predicted Price"].mean() if len(df_map) else 0
     avg_list = df_map["Price-$"].mean() if len(df_map) else 0
-    uv_pct   = (df_map["Value Label"] == "Undervalued").mean() * 100 if len(df_map) else 0
+    uv_pct   = (df_map["Value Label"] == "Potential Good Deal").mean() * 100 if len(df_map) else 0
 
     k1, k2, k3, k4, k5 = st.columns(5)
     def kpi(col, label, value, sub, color="#e2e8f0"):
@@ -382,7 +420,7 @@ with tab1:
     gap_color = "#68d391" if avg_gap > 0 else "#fc8181"
     kpi(k4, "Avg Value Gap",     f"${avg_gap:+,.0f}",   "predicted − listed", gap_color)
     uv_color = "#68d391" if uv_pct >= 30 else ("#ecc94b" if uv_pct >= 15 else "#fc8181")
-    kpi(k5, "Undervalued %",     f"{uv_pct:.1f}%",      "of shown cars", uv_color)
+    kpi(k5, "Good Deal %",       f"{uv_pct:.1f}%",      "of shown cars", uv_color)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -421,9 +459,9 @@ with tab1:
     )
 
     st.markdown("""<div class='legend-row'>
-      <span><span class='ldot' style='background:#48bb78'></span>Undervalued — market value exceeds asking price</span>
-      <span><span class='ldot' style='background:#ecc94b'></span>Fair Value — priced in line with market</span>
-      <span><span class='ldot' style='background:#fc8181'></span>Overpriced — asking price exceeds market value</span>
+      <span><span class='ldot' style='background:#48bb78'></span>Potential Good Deal — asking price is close to or below AI estimated value</span>
+      <span><span class='ldot' style='background:#ecc94b'></span>Fair Deal — priced reasonably in line with market</span>
+      <span><span class='ldot' style='background:#fc8181'></span>Potential Bad Deal — asking price significantly above AI estimate</span>
     </div>""", unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -456,7 +494,7 @@ with tab2:
         with fb1:
             f_verdict = st.radio(
                 "Value Verdict",
-                ["All", "🟢 Undervalued only", "🟡 Fair Value only", "🔴 Overpriced only"],
+                ["All", "🟢 Potential Good Deal only", "🟡 Fair Deal only", "🔴 Potential Bad Deal only"],
                 horizontal=True,
             )
         with fb2:
@@ -473,9 +511,9 @@ with tab2:
     res = res[res["Price-$"] <= f_price]
     res = res[res["Mileage-KM"] <= f_mileage]
     res = res[res["Manufactured Year"] >= f_year]
-    if "Undervalued" in f_verdict: res = res[res["Value Label"] == "Undervalued"]
-    elif "Fair"      in f_verdict: res = res[res["Value Label"] == "Fair Value"]
-    elif "Overpriced" in f_verdict: res = res[res["Value Label"] == "Overpriced"]
+    if "Good" in f_verdict:  res = res[res["Value Label"] == "Potential Good Deal"]
+    elif "Fair" in f_verdict: res = res[res["Value Label"] == "Fair Deal"]
+    elif "Bad"  in f_verdict: res = res[res["Value Label"] == "Potential Bad Deal"]
     res = res[res["Value Score"] >= f_min_score]
     res = res.sort_values("Value Score", ascending=False)
 
@@ -571,16 +609,16 @@ with tab3:
         st.markdown("---")
         _, mid, _ = st.columns([1, 2, 1])
         with mid:
-            if verdict == "Undervalued":
-                cls, emoji, title = "v-green",  "🟢", "UNDERVALUED — Great Deal!"
+            if verdict == "Potential Good Deal":
+                cls, emoji, title = "v-green",  "🟢", "POTENTIAL GOOD DEAL — Worth Considering!"
                 detail = (f"This car is listed <strong>${abs(gap):,.0f} below</strong> its predicted market value. "
                           f"You could be getting {abs(vpct)*100:.1f}% more value than you're paying for.")
-            elif verdict == "Overpriced":
-                cls, emoji, title = "v-red",    "🔴", "OVERPRICED — Negotiate or Walk Away"
+            elif verdict == "Potential Bad Deal":
+                cls, emoji, title = "v-red",    "🔴", "POTENTIAL BAD DEAL — Negotiate or Walk Away"
                 detail = (f"The asking price is <strong>${abs(gap):,.0f} above</strong> what the market data suggests. "
                           f"Try negotiating down or look for similar cars in the Deal Finder.")
             else:
-                cls, emoji, title = "v-yellow", "🟡", "FAIR VALUE — Reasonable Deal"
+                cls, emoji, title = "v-yellow", "🟡", "FAIR DEAL — Reasonable Price"
                 detail = (f"The asking price aligns with the predicted market value "
                           f"(gap: <strong>${gap:+,.0f}</strong>). No red flags, but no significant bargain either.")
 
@@ -632,7 +670,7 @@ with tab4:
         lc.columns = ["Label", "Count"]
         fig_pie = px.pie(lc, names="Label", values="Count", hole=0.45,
                          color="Label",
-                         color_discrete_map={"Undervalued":"#68d391","Fair Value":"#ecc94b","Overpriced":"#fc8181"})
+                         color_discrete_map={"Potential Good Deal":"#68d391","Fair Deal":"#ecc94b","Potential Bad Deal":"#fc8181"})
         fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#e2e8f0",
                                margin=dict(t=10,b=10,l=10,r=10))
         st.plotly_chart(fig_pie, use_container_width=True)
@@ -690,7 +728,7 @@ with tab4:
         st.markdown("**Verdict Distribution by Fuel Type**")
         en_lbl = df_unsold.groupby(["Energy","Value Label"]).size().reset_index(name="Count")
         fig_en = px.bar(en_lbl, x="Energy", y="Count", color="Value Label", barmode="group",
-                         color_discrete_map={"Undervalued":"#68d391","Fair Value":"#ecc94b","Overpriced":"#fc8181"})
+                         color_discrete_map={"Potential Good Deal":"#68d391","Fair Deal":"#ecc94b","Potential Bad Deal":"#fc8181"})
         fig_en.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                               font_color="#e2e8f0", height=380, margin=dict(t=10,b=10))
         fig_en.update_xaxes(gridcolor="#2d3748"); fig_en.update_yaxes(gridcolor="#2d3748")
@@ -750,9 +788,9 @@ with tab5:
     st.info(
         f"**Why we use quantile thresholds:** The raw Value% metric (predicted − listed) / predicted "
         f"is centred around **−0.17** because dealers systematically list above market. "
-        f"Using fixed ±10% thresholds around 0 would classify nearly everything as 'Overpriced'. "
+        f"Using fixed ±10% thresholds around 0 would classify nearly everything as a 'Potential Bad Deal'. "
         f"Instead, we use Q25 = **{t_low:.3f}** and Q75 = **{t_high:.3f}** of the actual distribution, "
-        f"ensuring a natural ~25 / 50 / 25 split across Overpriced / Fair Value / Undervalued."
+        f"ensuring a natural ~25 / 50 / 25 split across Potential Bad Deal / Fair Deal / Potential Good Deal."
     )
 
     if len(model_comp_df) > 0:
@@ -778,7 +816,7 @@ with tab5:
 | **Remaining 44%** | Expected | Negotiation, urgency, local demand — not observable in structured data |
 | **Training set** | 2,166 sold cars | Ground-truth market-clearing prices |
 | **Prediction set** | 7,834 unsold cars | Never seen during training |
-    """.replace("$749 on a", "$749 on a\u200b"))
+    """.replace("$749 on a", "$749 on\u00a0a"))
 
     st.markdown("### 📊 Value% Distribution Across Unsold Inventory")
     fig_d = go.Figure()
