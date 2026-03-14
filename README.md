@@ -62,11 +62,6 @@ carvalue-ai/
 
 ### Streamlit Cloud setup for Chatbot
 
-Add your Anthropic API key as a secret in the Streamlit Cloud dashboard:
-
-```toml
-# .streamlit/secrets.toml
-ANTHROPIC_API_KEY = "sk-ant-..."
-```
+The chatbot uses an API Anthropic Key for the Chatbot which is hidden as a secret on Streamlit.
 
 The key is automatically injected as an environment variable and picked up by `chatbot_engine.py`.
