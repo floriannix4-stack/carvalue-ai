@@ -79,6 +79,8 @@ st.markdown("""
     color: #e2e8f0 !important;
     border-color: #2d4a7a !important;
   }
+  [data-testid="stChatInput"] textarea::placeholder { color: #718096 !important; }
+  [data-testid="stChatInputContainer"] { background-color: #161b22 !important; border-color: #2d4a7a !important; }
 
   .page-title {
     font-family: 'Space Mono', monospace;

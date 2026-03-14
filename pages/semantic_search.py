@@ -177,9 +177,7 @@ if query.strip():
         else:
             v_cls = "verdict-bad"
 
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            st.markdown(f"""
+        st.markdown(f"""
             <div class='car-card'>
               <div class='car-title'>
                 #{i+1} &nbsp; {int(row['Manufactured Year'])} {row['Manufacturer Name']} {row['Car Name']}
@@ -199,9 +197,6 @@ if query.strip():
               </div>
             </div>
             """, unsafe_allow_html=True)
-        with c2:
-            st.metric("Deal Score", f"{row['Deal Score']:.0f}/100")
-            st.metric("Asking", f"${int(row['Price-$']):,}")
 
     st.markdown("---")
     st.info("💬 Want to ask questions about these results? Head to the **AI Chatbot** page in the sidebar.")
