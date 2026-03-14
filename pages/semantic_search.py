@@ -8,6 +8,8 @@ listings from the inventory using sentence-transformer embeddings + FAISS.
 
 import streamlit as st
 import pandas as pd
+import numpy as np
+import joblib
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -15,12 +17,18 @@ from src.embeddings import build_index, load_index, semantic_search
 
 st.set_page_config(page_title="Semantic Search · CarValue AI", page_icon="🔍", layout="wide")
 
-# ── shared CSS (same dark theme as main app) ──────────────────────────────────
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;600&display=swap');
   html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-  .page-title { font-family: 'Space Mono', monospace; font-size: 1.6rem; font-weight: 700; color: #f7fafc; }
+  .stApp, .stApp > div { background-color: #0d1117 !important; }
+  section[data-testid="stSidebar"] { background-color: #161b22 !important; }
+  .page-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #f7fafc;
+  }
   .sim-badge {
     display: inline-block;
     background: #1a3a2d;
@@ -38,11 +46,11 @@ st.markdown("""
     padding: 16px 20px;
     margin-bottom: 10px;
   }
-  .car-title { font-weight: 600; font-size: 15px; color: #e2e8f0; }
+  .car-title  { font-weight: 600; font-size: 15px; color: #e2e8f0; }
   .car-detail { font-size: 13px; color: #a0aec0; margin-top: 4px; }
-  .verdict-good     { color: #68d391; font-weight: 600; }
-  .verdict-potential{ color: #ecc94b; font-weight: 600; }
-  .verdict-risky    { color: #fc8181; font-weight: 600; }
+  .verdict-good { color: #68d391; font-weight: 600; }
+  .verdict-fair { color: #ecc94b; font-weight: 600; }
+  .verdict-bad  { color: #fc8181; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -56,12 +64,9 @@ st.caption(
 # ── load data + index ─────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Building embedding index…")
 def get_index():
-    """Try to load saved index; rebuild from scratch if not found."""
     result = load_index()
     if result is not None:
         return result
-    # Rebuild — load df the same way as app.py does
-    import pandas as pd, joblib, numpy as np
 
     df = pd.read_csv("data/used_car_sales.csv")
     for c in ["Manufactured Year", "Mileage-KM", "Engine Power-HP",
@@ -83,16 +88,20 @@ def get_index():
 
     model = joblib.load("model/model.pkl")
     df_unsold["Predicted Price"] = model.predict(df_unsold[FEATURES])
-    df_unsold["Gap ($)"]         = df_unsold["Price-$"] - df_unsold["Predicted Price"]
+    df_unsold["Value Gap"] = df_unsold["Predicted Price"] - df_unsold["Price-$"]
+    df_unsold["Gap ($)"]   = df_unsold["Price-$"] - df_unsold["Predicted Price"]
 
-    MAE = 749
-    def deal_label(g):
-        if g <= 1.5 * MAE: return "Good Deal"
-        if g <= 2.0 * MAE: return "Potential Deal"
-        return "Risky / Overpaying"
+    vp = df_unsold["Value Gap"] / df_unsold["Predicted Price"]
+    q_low  = float(np.quantile(vp, 0.25))
+    q_high = float(np.quantile(vp, 0.75))
 
-    df_unsold["Deal Label"] = df_unsold["Gap ($)"].apply(deal_label)
-    df_unsold["Deal Score"] = ((1 - df_unsold["Gap ($)"] / (2 * MAE)) * 100).clip(0, 100)
+    def deal_label(v):
+        if v >= q_high: return "Potential Good Deal"
+        if v <= q_low:  return "Potential Bad Deal"
+        return "Fair Deal"
+
+    df_unsold["Deal Label"] = vp.apply(deal_label)
+    df_unsold["Deal Score"] = ((vp - q_low) / (q_high - q_low) * 100).clip(0, 100)
 
     return build_index(df_unsold, save=True)
 
@@ -129,12 +138,12 @@ if query.strip():
     for i, row in results.iterrows():
         sim_pct = row["Similarity"] * 100
         verdict = row["Deal Label"]
-        if "Good" in verdict:
+        if verdict == "Potential Good Deal":
             v_cls = "verdict-good"
-        elif "Potential" in verdict:
-            v_cls = "verdict-potential"
+        elif verdict == "Fair Deal":
+            v_cls = "verdict-fair"
         else:
-            v_cls = "verdict-risky"
+            v_cls = "verdict-bad"
 
         c1, c2 = st.columns([3, 1])
         with c1:
@@ -162,7 +171,6 @@ if query.strip():
             st.metric("Deal Score", f"{row['Deal Score']:.0f}/100")
             st.metric("Asking", f"${int(row['Price-$']):,}")
 
-    # Offer to open chatbot with these results
     st.markdown("---")
     st.info("💬 Want to ask questions about these results? Head to the **AI Chatbot** page in the sidebar.")
 

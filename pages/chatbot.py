@@ -8,6 +8,7 @@ Maintains conversation history across turns.
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,7 +22,20 @@ st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;600&display=swap');
   html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-  .page-title { font-family: 'Space Mono', monospace; font-size: 1.6rem; font-weight: 700; color: #f7fafc; }
+  .stApp, .stApp > div { background-color: #0d1117 !important; }
+  section[data-testid="stSidebar"] {
+    background-color: #161b22 !important;
+    border-right: 1px solid #2d3748;
+  }
+  section[data-testid="stSidebar"] label,
+  section[data-testid="stSidebar"] p,
+  section[data-testid="stSidebar"] span { color: #e2e8f0 !important; }
+  .page-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #f7fafc;
+  }
   .mode-badge {
     display: inline-block;
     font-size: 11px;
@@ -30,8 +44,9 @@ st.markdown("""
     border-radius: 6px;
     margin-left: 8px;
   }
-  .mode-semantic  { background: #1a3a2d; border: 1px solid #68d391; color: #68d391; }
-  .mode-aggregate { background: #2d2a00; border: 1px solid #ecc94b; color: #ecc94b; }
+  .mode-semantic   { background: #1a3a2d; border: 1px solid #68d391; color: #68d391; }
+  .mode-aggregate  { background: #2d2a00; border: 1px solid #ecc94b; color: #ecc94b; }
+  .mode-best_deals { background: #1a2a3d; border: 1px solid #76e4f7; color: #76e4f7; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -65,16 +80,20 @@ def get_data_and_index():
 
     model = joblib.load("model/model.pkl")
     df_unsold["Predicted Price"] = model.predict(df_unsold[FEATURES])
-    df_unsold["Gap ($)"]         = df_unsold["Price-$"] - df_unsold["Predicted Price"]
-    MAE = 749
+    df_unsold["Value Gap"] = df_unsold["Predicted Price"] - df_unsold["Price-$"]
+    df_unsold["Gap ($)"]   = df_unsold["Price-$"] - df_unsold["Predicted Price"]
 
-    def deal_label(g):
-        if g <= 1.5 * MAE: return "Good Deal"
-        if g <= 2.0 * MAE: return "Potential Deal"
-        return "Risky / Overpaying"
+    vp = df_unsold["Value Gap"] / df_unsold["Predicted Price"]
+    q_low  = float(np.quantile(vp, 0.25))
+    q_high = float(np.quantile(vp, 0.75))
 
-    df_unsold["Deal Label"] = df_unsold["Gap ($)"].apply(deal_label)
-    df_unsold["Deal Score"] = ((1 - df_unsold["Gap ($)"] / (2 * MAE)) * 100).clip(0, 100)
+    def deal_label(v):
+        if v >= q_high: return "Potential Good Deal"
+        if v <= q_low:  return "Potential Bad Deal"
+        return "Fair Deal"
+
+    df_unsold["Deal Label"] = vp.apply(deal_label)
+    df_unsold["Deal Score"] = ((vp - q_low) / (q_high - q_low) * 100).clip(0, 100)
 
     # Try loading FAISS index
     result = load_index()
@@ -94,7 +113,7 @@ df_unsold, faiss_index = get_data_and_index()
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "contexts" not in st.session_state:
-    st.session_state.contexts = []   # parallel list for retrieved context
+    st.session_state.contexts = []
 
 # ── sidebar controls ──────────────────────────────────────────────────────────
 with st.sidebar:
@@ -110,11 +129,11 @@ with st.sidebar:
     st.markdown("**Example questions:**")
     examples = [
         "What's the average price of a Toyota SUV?",
-        "Find me a good deal on an electric car",
-        "How many diesel cars are in Good Deal category?",
+        "Find me a Potential Good Deal on an electric car",
+        "Which manufacturer has the most Fair Deals?",
         "Compare Mahindra and Maruti average prices",
         "Show me cars similar to a 2022 Hyundai i20",
-        "Why might a car be marked as Risky?",
+        "What makes a car a Potential Bad Deal?",
         "Which location has the best deals on average?",
     ]
     for ex in examples:
@@ -126,7 +145,6 @@ with st.sidebar:
 for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
-        # Show retrieved context under assistant messages if toggled
         if show_context and msg["role"] == "assistant" and i // 2 < len(st.session_state.contexts):
             ctx_data = st.session_state.contexts[i // 2]
             with st.expander(f"📎 Retrieved context ({ctx_data['mode']} retrieval)"):
@@ -137,12 +155,10 @@ prefill = st.session_state.pop("_prefill", "")
 user_input = st.chat_input("Ask about the car inventory…") or prefill
 
 if user_input:
-    # Show user message
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # Run RAG pipeline
     with st.chat_message("assistant"):
         with st.spinner("Thinking…"):
             api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -157,7 +173,7 @@ if user_input:
                 try:
                     answer, context_str, mode = chat(
                         question=user_input,
-                        history=st.session_state.messages[:-1],  # exclude current user msg
+                        history=st.session_state.messages[:-1],
                         df=df_unsold,
                         index=faiss_index,
                         k=k_results,
