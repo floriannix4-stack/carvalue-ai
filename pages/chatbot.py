@@ -74,13 +74,18 @@ st.markdown("""
   .stSlider label, .stToggle label { color: #e2e8f0 !important; }
 
   /* ── Chat input box ── */
+  [data-testid="stChatInput"],
+  [data-testid="stChatInputContainer"],
+  [data-testid="stBottom"],
+  [data-testid="stBottom"] > div,
+  .stChatInput { background-color: #0d1117 !important; border: none !important; box-shadow: none !important; }
   [data-testid="stChatInput"] textarea {
     background-color: #161b22 !important;
     color: #e2e8f0 !important;
-    border-color: #2d4a7a !important;
+    border: 1px solid #2d4a7a !important;
+    border-radius: 8px !important;
   }
   [data-testid="stChatInput"] textarea::placeholder { color: #718096 !important; }
-  [data-testid="stChatInputContainer"] { background-color: #161b22 !important; border-color: #2d4a7a !important; }
 
   .page-title {
     font-family: 'Space Mono', monospace;
