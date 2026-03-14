@@ -21,8 +21,40 @@ st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;600&display=swap');
   html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-  .stApp, .stApp > div { background-color: #0d1117 !important; }
-  section[data-testid="stSidebar"] { background-color: #161b22 !important; }
+
+  /* ── Dark backgrounds ── */
+  .stApp, .stApp > div, .main, .block-container { background-color: #0d1117 !important; }
+  section[data-testid="stSidebar"] {
+    background-color: #161b22 !important;
+    border-right: 1px solid #2d3748;
+  }
+
+  /* ── Sidebar: force ALL text white ── */
+  section[data-testid="stSidebar"],
+  section[data-testid="stSidebar"] *,
+  section[data-testid="stSidebar"] label,
+  section[data-testid="stSidebar"] p,
+  section[data-testid="stSidebar"] span,
+  section[data-testid="stSidebar"] div,
+  section[data-testid="stSidebar"] a { color: #e2e8f0 !important; }
+
+  /* ── Main area general text ── */
+  .stApp p, .stApp span, .stApp label,
+  .stApp .stMarkdown, .stApp .stCaption { color: #e2e8f0 !important; }
+
+  /* ── Search input dark ── */
+  [data-baseweb="input"] input,
+  [data-baseweb="base-input"] input {
+    background-color: #161b22 !important;
+    color: #e2e8f0 !important;
+    border-color: #2d4a7a !important;
+  }
+
+  /* ── Metrics dark ── */
+  div[data-testid="stMetric"] { background-color: #161b22; border-radius: 10px; padding: 12px; border: 1px solid #2d3748; }
+  div[data-testid="stMetricValue"] > div { color: #e2e8f0 !important; }
+  div[data-testid="stMetricLabel"] > div { color: #718096 !important; }
+
   .page-title {
     font-family: 'Space Mono', monospace;
     font-size: 1.6rem;

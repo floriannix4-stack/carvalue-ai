@@ -22,14 +22,64 @@ st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;600&display=swap');
   html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-  .stApp, .stApp > div { background-color: #0d1117 !important; }
+
+  /* ── Dark backgrounds ── */
+  .stApp, .stApp > div, .main, .block-container { background-color: #0d1117 !important; }
   section[data-testid="stSidebar"] {
     background-color: #161b22 !important;
     border-right: 1px solid #2d3748;
   }
+
+  /* ── Sidebar: force ALL text white ── */
+  section[data-testid="stSidebar"],
+  section[data-testid="stSidebar"] *,
   section[data-testid="stSidebar"] label,
   section[data-testid="stSidebar"] p,
-  section[data-testid="stSidebar"] span { color: #e2e8f0 !important; }
+  section[data-testid="stSidebar"] span,
+  section[data-testid="stSidebar"] div,
+  section[data-testid="stSidebar"] .stMarkdown { color: #e2e8f0 !important; }
+
+  /* ── Main area: all text white ── */
+  .stApp p, .stApp div, .stApp span, .stApp label,
+  .stApp .stMarkdown, .stApp .stCaption { color: #e2e8f0 !important; }
+
+  /* ── Chat messages ── */
+  [data-testid="stChatMessage"] { background-color: #161b22 !important; border-radius: 12px; }
+  [data-testid="stChatMessage"] p,
+  [data-testid="stChatMessage"] div,
+  [data-testid="stChatMessage"] span { color: #e2e8f0 !important; }
+
+  /* ── Example question buttons: dark bg, white text ── */
+  section[data-testid="stSidebar"] .stButton button {
+    background-color: #1a1a2e !important;
+    color: #e2e8f0 !important;
+    border: 1px solid #2d4a7a !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+  }
+  section[data-testid="stSidebar"] .stButton button:hover {
+    background-color: #2d4a7a !important;
+    border-color: #76e4f7 !important;
+  }
+
+  /* ── Clear conversation button ── */
+  section[data-testid="stSidebar"] .stButton button[kind="secondary"],
+  section[data-testid="stSidebar"] .stButton button {
+    background-color: #1a1a2e !important;
+    color: #e2e8f0 !important;
+    border: 1px solid #2d4a7a !important;
+  }
+
+  /* ── Slider, toggle labels ── */
+  .stSlider label, .stToggle label { color: #e2e8f0 !important; }
+
+  /* ── Chat input box ── */
+  [data-testid="stChatInput"] textarea {
+    background-color: #161b22 !important;
+    color: #e2e8f0 !important;
+    border-color: #2d4a7a !important;
+  }
+
   .page-title {
     font-family: 'Space Mono', monospace;
     font-size: 1.6rem;
@@ -44,9 +94,9 @@ st.markdown("""
     border-radius: 6px;
     margin-left: 8px;
   }
-  .mode-semantic   { background: #1a3a2d; border: 1px solid #68d391; color: #68d391; }
-  .mode-aggregate  { background: #2d2a00; border: 1px solid #ecc94b; color: #ecc94b; }
-  .mode-best_deals { background: #1a2a3d; border: 1px solid #76e4f7; color: #76e4f7; }
+  .mode-semantic   { background: #1a3a2d; border: 1px solid #68d391; color: #68d391 !important; }
+  .mode-aggregate  { background: #2d2a00; border: 1px solid #ecc94b; color: #ecc94b !important; }
+  .mode-best_deals { background: #1a2a3d; border: 1px solid #76e4f7; color: #76e4f7 !important; }
 </style>
 """, unsafe_allow_html=True)
 
