@@ -88,16 +88,122 @@ def load_index() -> tuple | None:
     return data["index"], data["df"], data["embeddings"]
 
 
+# ── attribute extractor ───────────────────────────────────────────────────────
+def _extract_filters(query: str, df: pd.DataFrame) -> dict:
+    """
+    Scan the query for explicitly mentioned structured attributes.
+    Returns a dict of {column: value} for any that are found.
+    Only detects attributes whose values actually exist in the dataset.
+    """
+    q = query.lower()
+    filters = {}
+
+    # Color
+    for val in df["Color"].dropna().unique():
+        if val.lower() in q:
+            filters["Color"] = val
+            break
+
+    # Car Type
+    for val in df["Car Type"].dropna().unique():
+        if val.lower() in q:
+            filters["Car Type"] = val
+            break
+
+    # Energy / fuel
+    for val in df["Energy"].dropna().unique():
+        if val.lower() in q:
+            filters["Energy"] = val
+            break
+
+    # Gearbox
+    if "automatic" in q:
+        filters["Gearbox"] = "Automatic"
+    elif "manual" in q:
+        filters["Gearbox"] = "Manual"
+
+    # Manufacturer
+    for val in df["Manufacturer Name"].dropna().unique():
+        if val.lower() in q:
+            filters["Manufacturer Name"] = val
+            break
+
+    # Location / state
+    for val in df["Location"].dropna().unique():
+        if val.lower() in q:
+            filters["Location"] = val
+            break
+
+    # Number of doors
+    import re
+    door_match = re.search(r"(\d)\s*door", q)
+    if door_match:
+        filters["Number of Doors"] = int(door_match.group(1))
+
+    # Number of seats
+    seat_match = re.search(r"(\d)\s*seat", q)
+    if seat_match:
+        filters["Number of Seats"] = int(seat_match.group(1))
+
+    return filters
+
+
 # ── search ────────────────────────────────────────────────────────────────────
 def semantic_search(query: str, index, df: pd.DataFrame, k: int = 10) -> pd.DataFrame:
     """
     Embed a free-text query and return the top-k most similar cars.
+    If the query explicitly mentions structured attributes (color, car type,
+    gearbox, fuel, manufacturer, location, doors, seats), results are filtered
+    to exact matches on those attributes only — other attributes remain open.
     """
     encoder = _get_encoder()
     q_vec = encoder.encode([query], normalize_embeddings=True)
     q_vec = np.array(q_vec, dtype="float32")
 
-    scores, indices = index.search(q_vec, k)
-    results = df.iloc[indices[0]].copy()
-    results["Similarity"] = scores[0]
+    # Detect any explicitly mentioned filters
+    filters = _extract_filters(query, df)
+
+    if filters:
+        # Apply hard filters to get a candidate pool
+        mask = pd.Series([True] * len(df), index=df.index)
+        for col, val in filters.items():
+            if col in df.columns:
+                mask &= df[col] == val
+        df_pool = df[mask].copy()
+
+        if len(df_pool) == 0:
+            # No exact matches — fall back to unfiltered search
+            df_pool = df.copy()
+            filters = {}
+    else:
+        df_pool = df.copy()
+
+    # Search within the pool using the original FAISS indices
+    # Map pool rows back to their FAISS index positions
+    pool_indices = df_pool.index.tolist()
+
+    # Fetch a large candidate set from FAISS then intersect with pool
+    fetch_k = min(len(df), max(k * 20, 500))
+    scores, indices = index.search(q_vec, fetch_k)
+
+    # Keep only results that are in the filtered pool
+    pool_set = set(pool_indices)
+    matched = [(idx, score) for idx, score in zip(indices[0], scores[0]) if idx in pool_set]
+
+    # Take top k
+    matched = matched[:k]
+
+    if not matched:
+        # Fallback: just return top-k from pool by order
+        results = df_pool.head(k).copy()
+        results["Similarity"] = 0.0
+        results["_filters_applied"] = str(filters)
+        return results.reset_index(drop=True)
+
+    result_indices = [m[0] for m in matched]
+    result_scores  = [m[1] for m in matched]
+
+    results = df.iloc[result_indices].copy()
+    results["Similarity"] = result_scores
+    results["_filters_applied"] = str(filters) if filters else ""
     return results.reset_index(drop=True)

@@ -164,7 +164,26 @@ if query.strip():
     with st.spinner("Searching…"):
         results = semantic_search(query.strip(), index, df_unsold, k=k)
 
-    st.markdown(f"**{len(results)} results** for *\"{query}\"*")
+    # Show which filters were enforced as exact matches
+    filters_applied = results["_filters_applied"].iloc[0] if "_filters_applied" in results.columns and len(results) else ""
+    if filters_applied and filters_applied != "{}":
+        import ast as _ast
+        try:
+            f_dict = _ast.literal_eval(filters_applied)
+            badge_html = " ".join(
+                f"<span style='background:#1a2a3d;border:1px solid #76e4f7;border-radius:6px;"
+                f"padding:2px 8px;font-size:11px;color:#76e4f7;font-family:monospace'>"
+                f"✦ {col}: <strong>{val}</strong></span>"
+                for col, val in f_dict.items()
+            )
+            st.markdown(
+                f"**{len(results)} results** for *\"{query}\"* &nbsp; — &nbsp; exact filters applied: {badge_html}",
+                unsafe_allow_html=True
+            )
+        except Exception:
+            st.markdown(f"**{len(results)} results** for *\"{query}\"*")
+    else:
+        st.markdown(f"**{len(results)} results** for *\"{query}\"*")
     st.markdown("---")
 
     for i, row in results.iterrows():
